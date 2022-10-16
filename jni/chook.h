@@ -1,6 +1,7 @@
 #ifndef CHOOK_H
 #define CHOOK_H
 
+#include <elf.h>
 #include "ch_utils.h"
 
 #ifdef __cplusplus
