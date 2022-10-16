@@ -9,12 +9,14 @@ extern "C" {
 #endif
 
 typedef struct{
-    const char* pathname;
+    const char* module_name;
     char *symbol;
     void *new_func;
     void **old_func;
 } ch_hook_info_t;
 
+ch_hook_info_t* chook_register_hook(const char* module_name, char *symbol);
+int chook_refresh();
 
 #ifdef __cplusplus
 }
