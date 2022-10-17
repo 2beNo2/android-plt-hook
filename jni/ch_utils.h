@@ -11,6 +11,18 @@
 #define MAX_LENGTH 1024
 #endif //MAX_LENGTH
 
+#include <android/log.h>
+
+#define CH_DEBUG
+#ifdef CH_DEBUG
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "CH_HOOK", __VA_ARGS__)
+#else
+#define LOGD(...)
+#endif // CH_DEBUG
+
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "CH_HOOK", __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  "CH_HOOK", __VA_ARGS__)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -62,7 +74,7 @@ void* ch_utils_get_module_base(pid_t pid, const char* module_name){
     }
     fclose(fp);
 
-    
+
     return base_addr;
 }
 
