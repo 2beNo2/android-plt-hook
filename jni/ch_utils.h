@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <inttypes.h>
 
 #ifndef MAX_LENGTH
 #define MAX_LENGTH 1024
@@ -15,18 +16,19 @@ extern "C" {
 #endif
 
 /**
- * get moduleBase from /proc/pid/maps
+ * get module base from /proc/pid/maps
  *  pid  = -1, get self
  *  pid != -1, get target process
  *  module_name -> module name
  */
 void* ch_utils_get_module_base(pid_t pid, const char* module_name){
     FILE* fp = NULL;
-    void* address = NULL;
+    void* base_addr = NULL;
+    char perm[5];
     char path[MAX_LENGTH] = {0};
     char buff[MAX_LENGTH] = {0};
 
-    if(module_name == NULL){
+    if(NULL == module_name){
         return NULL;
     }
 
@@ -38,19 +40,30 @@ void* ch_utils_get_module_base(pid_t pid, const char* module_name){
     }
 
     fp = fopen(path, "r");
-    if(fp == NULL){
+    if(NULL == fp){
         perror("[-] fopen");
-        return  NULL;
+        return NULL;
     }
 
     while(fgets(buff, sizeof(buff), fp)){
+        if(sscanf(buff, "%"PRIxPTR"-%*lx %4s", &base_addr, perm) != 2) 
+            continue;
+
+         // do not touch the shared memory
+        if (perm[3] != 'p') continue;
+
+        // Ignore permission PROT_NONE maps
+        if (perm[0] == '-' && perm[1] == '-' && perm[2] == '-')
+            continue;
+
         if (strstr(buff, module_name) != NULL) {
-            sscanf(buff, "%p", &address);
             break;
         }
     }
     fclose(fp);
-    return address;
+
+    
+    return base_addr;
 }
 
 
