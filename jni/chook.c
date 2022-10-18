@@ -1,5 +1,7 @@
 #include "chook.h"
 #include "ch_utils.h"
+#include "ch_elf.h"
+
 
 ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func){
     ch_hook_info_t* info = NULL;
@@ -35,6 +37,7 @@ int chook_hook(ch_hook_info_t* info){
     //get module base
     void* module_base = ch_utils_get_module_base(-1, info->module_name);
     if(NULL == module_base){
+        LOGD("[-] get module_base failed");
         return -1;
     }
     LOGD("[+] module_base:%p", module_base);
