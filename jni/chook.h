@@ -1,7 +1,5 @@
 #ifndef CHOOK_H
-#define CHOOK_H
-
-#include "ch_utils.h"
+#define CHOOK_H 1
 
 /*
 1、首先确定要hook的库名称和函数名称

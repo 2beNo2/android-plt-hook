@@ -1,5 +1,5 @@
 #include "chook.h"
-
+#include "ch_utils.h"
 
 ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func){
     ch_hook_info_t* info = NULL;
@@ -37,6 +37,7 @@ int chook_hook(ch_hook_info_t* info){
     if(NULL == module_base){
         return -1;
     }
+    LOGD("[+] module_base:%p", module_base);
 
     //check elf header format
 
