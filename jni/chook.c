@@ -37,17 +37,24 @@ int chook_hook(ch_hook_info_t* info){
     //get module base
     void* module_base = ch_utils_get_module_base(-1, info->module_name);
     if(NULL == module_base){
-        LOGD("[-] get module_base failed");
+        LOGD("[-] get module_base failed!");
         return -1;
     }
     LOGD("[+] module_base:%p", module_base);
 
     //check elf header format
+    if(ch_elf_check_elfheader((uintptr_t)module_base) < 0){
+        LOGD("[-] elf header format error!");
+        return -1;
+    }
+    LOGD("[+] elf header format is ok");
 
     //init elf
 
+
     //start hook
 
+    
     return 0;
 }
 

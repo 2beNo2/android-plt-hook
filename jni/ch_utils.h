@@ -10,6 +10,21 @@
 #define MAX_LENGTH 1024
 #endif //MAX_LENGTH
 
+#include <android/log.h>
+
+#define CH_DEBUG
+#define TAG "CH_HOOK"
+
+#ifdef CH_DEBUG
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
+#else
+#define LOGD(...)
+#endif // CH_DEBUG
+
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  TAG, __VA_ARGS__)
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -48,13 +63,12 @@ void* ch_utils_get_module_base(pid_t pid, const char* module_name){
     while(fgets(buff, sizeof(buff), fp)){
         if(sscanf(buff, "%p-%*p %4s", &base_addr, perm) != 2) 
             continue;
-
-         // do not touch the shared memory
+        
+        // do not touch the shared memory
         if (perm[3] != 'p') continue;
 
         // Ignore permission PROT_NONE maps
-        if (perm[0] == '-' && perm[1] == '-' && perm[2] == '-')
-            continue;
+        if (perm[0] == '-' && perm[1] == '-' && perm[2] == '-') continue;
 
         if (strstr(buff, module_name) != NULL) {
             break;
@@ -69,18 +83,5 @@ void* ch_utils_get_module_base(pid_t pid, const char* module_name){
 }
 #endif
 
-
-
-#include <android/log.h>
-
-#define CH_DEBUG
-#ifdef CH_DEBUG
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "CH_HOOK", __VA_ARGS__)
-#else
-#define LOGD(...)
-#endif // CH_DEBUG
-
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "CH_HOOK", __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  "CH_HOOK", __VA_ARGS__)
 
 #endif //CH_UTILS_H
