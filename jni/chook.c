@@ -3,6 +3,57 @@
 #include "ch_elf.h"
 
 
+
+/**
+ * get module base from /proc/pid/maps
+ *  pid  = -1, get self
+ *  pid != -1, get target process
+ *  module_name -> module name
+ */
+static void* ch_utils_get_module_base(pid_t pid, const char* module_name){
+    FILE* fp = NULL;
+    void* base_addr = NULL;
+    char perm[5];
+    char path[MAX_LENGTH] = {0};
+    char buff[MAX_LENGTH] = {0};
+
+    if(NULL == module_name){
+        return NULL;
+    }
+
+    if(pid < 0){
+        snprintf(path, sizeof(path), "/proc/self/maps");
+    }
+    else{
+        snprintf(path, sizeof(path), "/proc/%d/maps", pid);
+    }
+
+    fp = fopen(path, "r");
+    if(NULL == fp){
+        perror("[-] fopen");
+        return NULL;
+    }
+
+    while(fgets(buff, sizeof(buff), fp)){
+        if(sscanf(buff, "%p-%*p %4s", &base_addr, perm) != 2) 
+            continue;
+        
+        // do not touch the shared memory
+        if (perm[3] != 'p') continue;
+
+        // Ignore permission PROT_NONE maps
+        if (perm[0] == '-' && perm[1] == '-' && perm[2] == '-') continue;
+
+        if (strstr(buff, module_name) != NULL) {
+            break;
+        }
+    }
+
+    fclose(fp);
+    return base_addr;
+}
+
+
 ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func){
     ch_hook_info_t* info = NULL;
 
@@ -27,6 +78,8 @@ ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name,
 
 
 int chook_hook(ch_hook_info_t* info){
+    ch_elf_t ch_self;
+
     if(NULL == info){
         return -1;
     }
@@ -42,6 +95,7 @@ int chook_hook(ch_hook_info_t* info){
     }
     LOGD("[+] module_base:%p", module_base);
 
+
     //check elf header format
     if(ch_elf_check_elfheader((uintptr_t)module_base) < 0){
         LOGD("[-] elf header format error!");
@@ -49,7 +103,13 @@ int chook_hook(ch_hook_info_t* info){
     }
     LOGD("[+] elf header format is ok");
 
+
     //init elf
+    if(ch_elf_init(&ch_self, (uintptr_t)module_base) < 0){
+        LOGD("[-] elf init failed!");
+        return -1;
+    }
+    LOGD("[+] elf init ok");
 
 
     //start hook

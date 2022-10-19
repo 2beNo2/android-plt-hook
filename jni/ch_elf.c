@@ -1,6 +1,9 @@
+#include <string.h>
+
+#include "ch_utils.h"
 #include "ch_elf.h"
 
-
+#define CH_ELF_DEBUG 1
 
 int ch_elf_check_elfheader(uintptr_t base_addr){
     ElfW(Ehdr) *ehdr = (ElfW(Ehdr)*)base_addr;
@@ -41,3 +44,154 @@ int ch_elf_check_elfheader(uintptr_t base_addr){
     if(EV_CURRENT != ehdr->e_version) return -1;
     return 0;
 }
+
+
+static ElfW(Phdr) *ch_elf_get_segment_by_type(ch_elf_t *self, ElfW(Word) type){
+    ElfW(Phdr) *phdr = NULL;
+    for(phdr = self->phdr; phdr < self->phdr + self->ehdr->e_phnum; phdr++){
+        if(phdr->p_type == type){
+            return phdr;
+        }
+    }
+    return NULL;
+}
+
+
+static ElfW(Phdr) *ch_elf_get_segment_by_type_and_offset(ch_elf_t *self, ElfW(Word) type, ElfW(Off) offset){
+    ElfW(Phdr) *phdr = NULL;
+    for(phdr = self->phdr; phdr < self->phdr + self->ehdr->e_phnum; phdr++){
+        if(phdr->p_type == type && phdr->p_offset == offset){
+            return phdr;
+        }
+    }
+    return NULL;
+}
+
+
+static void ch_elf_show_elf_info(ch_elf_t *self){
+    LOGD("[+] (HASH) :0x%"PRIxPTR"", self->hash - self->bias_addr);
+    LOGD("[+] (bucket_cnt) :0x%x", self->bucket_cnt);
+    LOGD("[+] (chain_cnt) :0x%x", self->chain_cnt);
+
+    LOGD("[+] (STRTAB) :0x%"PRIxPTR"", (ElfW(Addr))self->dynstr_tab - self->bias_addr);
+    LOGD("[+] (SYMTAB) :0x%"PRIxPTR"", (ElfW(Addr))self->dynsym_tab - self->bias_addr);
+    LOGD("[+] (JMPREL) :0x%"PRIxPTR"", (ElfW(Addr))self->relplt - self->bias_addr);
+    LOGD("[+] (REL) :0x%"PRIxPTR"",    (ElfW(Addr))self->reldyn - self->bias_addr);
+}
+
+
+//ELF hash func
+static uint32_t ch_elf_hash(const uint8_t *name){
+    uint32_t h = 0, g;
+    while (*name) {
+        h = (h << 4) + *name++;
+        g = h & 0xf0000000;
+        h ^= g;
+        h ^= g >> 24;
+    }
+    return h;
+}
+
+
+int  ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
+    ElfW(Phdr) *phdr0         = NULL;
+    ElfW(Phdr) *dynamic_Phdr  = NULL;
+    ElfW(Dyn)  *dyn           = NULL;
+    ElfW(Dyn)  *dyn_end       = NULL;
+    uint32_t   *hash          = NULL;
+
+    if(0 == base_addr) return -1;
+    
+    memset(self, 0, sizeof(ch_elf_t));
+    self->base_addr   = (ElfW(Addr))base_addr;
+    self->ehdr        = (ElfW(Ehdr)*)base_addr;
+    self->phdr        = (ElfW(Phdr)*)(base_addr + self->ehdr->e_phoff);
+
+    //find the first load-segment with offset 0
+    phdr0 = ch_elf_get_segment_by_type_and_offset(self, PT_LOAD, 0);
+    if(NULL == phdr0) return -1;
+
+    //save load bias addr
+    if(self->base_addr < phdr0->p_vaddr) return -1;
+    self->bias_addr = self->base_addr - phdr0->p_vaddr;
+
+    //find dynamic segment
+    dynamic_Phdr = ch_elf_get_segment_by_type(self, PT_DYNAMIC);
+    if(NULL == dynamic_Phdr) return -1;
+
+    //save dynamic phdr
+    self->dynamic     = (ElfW(Dyn)*)(self->bias_addr + dynamic_Phdr->p_offset);
+    self->dynamic_sz  = dynamic_Phdr->p_filesz;
+    dyn     = self->dynamic;
+    dyn_end = self->dynamic + (self->dynamic_sz / sizeof(ElfW(Dyn)));
+    
+    for(; dyn < dyn_end; dyn++){
+        switch(dyn->d_tag)
+        {
+        case DT_NULL:
+            {
+                dyn = dyn_end;
+                break;
+            }
+        case DT_STRTAB:
+            {
+                self->dynstr_tab = (const char *)(self->bias_addr + dyn->d_un.d_ptr);
+                break;
+            }
+        case DT_SYMTAB:
+            {
+                self->dynsym_tab = (ElfW(Sym)*)(self->bias_addr + dyn->d_un.d_ptr);
+                break;
+            }
+        case DT_HASH:
+            {
+               self->hash = self->bias_addr + dyn->d_un.d_ptr;
+               
+               hash = (uint32_t*)self->hash;
+               self->bucket_cnt = hash[0];
+               self->chain_cnt  = hash[1];
+               self->bucket = &hash[2];
+               self->chain  = &(self->bucket[self->bucket_cnt]);
+               break;
+            }
+        case DT_PLTREL:
+            {
+                //use rel or rela?
+                self->is_use_rela = (dyn->d_un.d_val == DT_RELA ? 1 : 0);
+                break;
+            }
+        case DT_JMPREL:
+            {
+                self->relplt = self->bias_addr + dyn->d_un.d_ptr;
+                break;
+            }
+        case DT_PLTRELSZ:
+            {
+                self->relplt_sz = dyn->d_un.d_val;
+                break;
+            }
+        case DT_REL:
+        case DT_RELA:
+            {
+                self->reldyn = self->bias_addr + dyn->d_un.d_ptr;
+                break;
+            }
+        case DT_RELSZ:
+        case DT_RELASZ:
+            {
+                self->reldyn_sz = dyn->d_un.d_val;
+                break;
+            }
+
+        default:
+            break;
+        }
+    }
+
+#ifdef CH_ELF_DEBUG
+    ch_elf_show_elf_info(self);
+#endif
+
+    return 0;
+}
+

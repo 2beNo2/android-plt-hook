@@ -25,8 +25,8 @@ typedef struct{
 } ch_hook_info_t;
 
 ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func);
-int chook_hook(ch_hook_info_t* info);
-int chook_unhook(ch_hook_info_t* info);
+int  chook_hook(ch_hook_info_t* info);
+int  chook_unhook(ch_hook_info_t* info);
 void chook_destruct(ch_hook_info_t* info);
 
 #ifdef __cplusplus
