@@ -6,7 +6,8 @@
 2、获取目标库在内存中的module-base
 	校验elf文件格式
 	进行elf格式解析：
-		-获取动态节的位置
+		-获取动态节的位置，解析获取elf的各种section
+	进行plt hook：
 		-在`.dynstr section`  中找到需要 hook 的 `symbol 对应的 index 值`
 		-遍历所有的 `.relxxx section`（重定位 section），查找 `symbol index` 和 `symbol type` 都匹配的项
 	将目标地址进行修改

@@ -68,18 +68,6 @@ static ElfW(Phdr) *ch_elf_get_segment_by_type_and_offset(ch_elf_t *self, ElfW(Wo
 }
 
 
-static void ch_elf_show_elf_info(ch_elf_t *self){
-    LOGD("[+] (HASH) :0x%x", self->hash - self->bias_addr);
-    LOGD("[+] (bucket_cnt) :0x%x", self->bucket_cnt);
-    LOGD("[+] (chain_cnt) :0x%x", self->chain_cnt);
-
-    LOGD("[+] (STRTAB) :0x%x", (ElfW(Addr))self->dynstr_tab - self->bias_addr);
-    LOGD("[+] (SYMTAB) :0x%x", (ElfW(Addr))self->dynsym_tab - self->bias_addr);
-    LOGD("[+] (JMPREL) :0x%x", (ElfW(Addr))self->relplt - self->bias_addr);
-    LOGD("[+] (REL) :0x%x",    (ElfW(Addr))self->reldyn - self->bias_addr);
-}
-
-
 //ELF hash func
 static uint32_t ch_elf_hash(const uint8_t *name){
     uint32_t h = 0, g;
@@ -93,7 +81,7 @@ static uint32_t ch_elf_hash(const uint8_t *name){
 }
 
 
-int  ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
+int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
     ElfW(Phdr) *phdr0         = NULL;
     ElfW(Phdr) *dynamic_Phdr  = NULL;
     ElfW(Dyn)  *dyn           = NULL;
@@ -120,11 +108,12 @@ int  ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
     if(NULL == dynamic_Phdr) return -1;
 
     //save dynamic phdr
-    self->dynamic     = (ElfW(Dyn)*)(self->bias_addr + dynamic_Phdr->p_offset);
-    self->dynamic_sz  = dynamic_Phdr->p_filesz;
+    self->dynamic     = (ElfW(Dyn)*)(self->bias_addr + dynamic_Phdr->p_vaddr);
+    self->dynamic_sz  = dynamic_Phdr->p_memsz;
     dyn     = self->dynamic;
     dyn_end = self->dynamic + (self->dynamic_sz / sizeof(ElfW(Dyn)));
-    
+    LOGD("[+] (DYNAMIC) :0x%x", dynamic_Phdr->p_vaddr);
+
     for(; dyn < dyn_end; dyn++){
         switch(dyn->d_tag)
         {
@@ -136,23 +125,14 @@ int  ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
         case DT_STRTAB:
             {
                 self->dynstr_tab = (const char *)(self->bias_addr + dyn->d_un.d_ptr);
+                LOGD("[+] (STRTAB) :0x%x", dyn->d_un.d_ptr);
                 break;
             }
         case DT_SYMTAB:
             {
                 self->dynsym_tab = (ElfW(Sym)*)(self->bias_addr + dyn->d_un.d_ptr);
+                LOGD("[+] (SYMTAB) :0x%x", dyn->d_un.d_ptr);
                 break;
-            }
-        case DT_HASH:
-            {
-               self->hash = self->bias_addr + dyn->d_un.d_ptr;
-               
-               hash = (uint32_t*)self->hash;
-               self->bucket_cnt = hash[0];
-               self->chain_cnt  = hash[1];
-               self->bucket = &hash[2];
-               self->chain  = &(self->bucket[self->bucket_cnt]);
-               break;
             }
         case DT_PLTREL:
             {
@@ -163,35 +143,66 @@ int  ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
         case DT_JMPREL:
             {
                 self->relplt = self->bias_addr + dyn->d_un.d_ptr;
+                LOGD("[+] (JMPREL) :0x%x", dyn->d_un.d_ptr);
                 break;
             }
         case DT_PLTRELSZ:
             {
                 self->relplt_sz = dyn->d_un.d_val;
+                LOGD("[+] (PLTRELSZ) :0x%x", dyn->d_un.d_val);
                 break;
             }
         case DT_REL:
         case DT_RELA:
             {
                 self->reldyn = self->bias_addr + dyn->d_un.d_ptr;
+                LOGD("[+] (REL/RELA) :0x%x", dyn->d_un.d_ptr);
                 break;
             }
         case DT_RELSZ:
         case DT_RELASZ:
             {
                 self->reldyn_sz = dyn->d_un.d_val;
+                LOGD("[+] (RELSZ/RELASZ) :0x%x", dyn->d_un.d_val);
                 break;
             }
-
+        case DT_HASH:
+            {
+                self->hash = self->bias_addr + dyn->d_un.d_ptr;
+                hash = (uint32_t*)self->hash;
+                self->hash_bucket_cnt  = hash[0];
+                self->hash_chain_cnt   = hash[1];
+                self->hash_bucket      = &hash[2];
+                self->hash_chain       = &(self->hash_bucket[self->hash_bucket_cnt]);
+                LOGD("[+] (HASH) :0x%x", dyn->d_un.d_ptr);
+                break;
+            }
+        case DT_GNU_HASH:
+            {
+                self->gnu_hash = self->bias_addr + dyn->d_un.d_ptr;
+                hash = (uint32_t *)(self->gnu_hash);
+                self->gnu_bucket_cnt  = hash[0];
+                self->symoffset       = hash[1];
+                self->bloom_sz        = hash[2];
+                self->bloom_shift     = hash[3];
+                self->bloom           = (ElfW(Addr) *)(&hash[4]);
+                self->gnu_bucket      = (uint32_t *)(&(self->bloom[self->bloom_sz]));
+                self->gnu_chain       = (uint32_t *)(&(self->gnu_bucket[self->gnu_bucket_cnt]));
+                LOGD("[+] (GNU_HASH) :0x%x", dyn->d_un.d_ptr);
+                break;
+            }
         default:
             break;
         }
     }
 
-#ifdef CH_ELF_DEBUG
-    ch_elf_show_elf_info(self);
-#endif
-
     return 0;
 }
 
+
+int ch_elf_plt_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func){
+
+
+
+    return 0;
+}

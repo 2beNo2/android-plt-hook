@@ -78,7 +78,7 @@ ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name,
 
 
 int chook_hook(ch_hook_info_t* info){
-    ch_elf_t ch_self;
+    ch_elf_t ch_elf;  //调用unhook 无法使用到，得使用堆
 
     if(NULL == info){
         return -1;
@@ -105,7 +105,7 @@ int chook_hook(ch_hook_info_t* info){
 
 
     //init elf
-    if(ch_elf_init(&ch_self, (uintptr_t)module_base) < 0){
+    if(ch_elf_init(&ch_elf, (uintptr_t)module_base) < 0){
         LOGD("[-] elf init failed!");
         return -1;
     }
@@ -113,7 +113,11 @@ int chook_hook(ch_hook_info_t* info){
 
 
     //start hook
-
+    if(ch_elf_plt_hook(&ch_elf, info->symbol_name, info->new_func, info->old_func) < 0){
+        LOGD("[-] elf plt hook failed!");
+        return -1;
+    }
+    LOGD("[+] elf plt hook ok");
     
     return 0;
 }
