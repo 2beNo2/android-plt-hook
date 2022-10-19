@@ -69,14 +69,14 @@ static ElfW(Phdr) *ch_elf_get_segment_by_type_and_offset(ch_elf_t *self, ElfW(Wo
 
 
 static void ch_elf_show_elf_info(ch_elf_t *self){
-    LOGD("[+] (HASH) :0x%"PRIxPTR"", self->hash - self->bias_addr);
+    LOGD("[+] (HASH) :0x%x", self->hash - self->bias_addr);
     LOGD("[+] (bucket_cnt) :0x%x", self->bucket_cnt);
     LOGD("[+] (chain_cnt) :0x%x", self->chain_cnt);
 
-    LOGD("[+] (STRTAB) :0x%"PRIxPTR"", (ElfW(Addr))self->dynstr_tab - self->bias_addr);
-    LOGD("[+] (SYMTAB) :0x%"PRIxPTR"", (ElfW(Addr))self->dynsym_tab - self->bias_addr);
-    LOGD("[+] (JMPREL) :0x%"PRIxPTR"", (ElfW(Addr))self->relplt - self->bias_addr);
-    LOGD("[+] (REL) :0x%"PRIxPTR"",    (ElfW(Addr))self->reldyn - self->bias_addr);
+    LOGD("[+] (STRTAB) :0x%x", (ElfW(Addr))self->dynstr_tab - self->bias_addr);
+    LOGD("[+] (SYMTAB) :0x%x", (ElfW(Addr))self->dynsym_tab - self->bias_addr);
+    LOGD("[+] (JMPREL) :0x%x", (ElfW(Addr))self->relplt - self->bias_addr);
+    LOGD("[+] (REL) :0x%x",    (ElfW(Addr))self->reldyn - self->bias_addr);
 }
 
 

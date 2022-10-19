@@ -25,7 +25,6 @@ typedef struct{
     const char *dynstr_tab; //.dynstr (string-table)
     ElfW(Sym)  *dynsym_tab; //.dynsym (symbol-index to string-table's offset)
 
-    int         is_use_rela;
     ElfW(Addr)  relplt; //.rel.plt or .rela.plt
     ElfW(Word)  relplt_sz;
     
@@ -42,6 +41,14 @@ typedef struct{
     uint32_t    *chain;
     uint32_t    chain_cnt;
 
+    //for GNU hash
+    uint32_t    symoffset;
+    ElfW(Addr)  *bloom;
+    uint32_t    bloom_sz;
+    uint32_t    bloom_shift;
+    
+    int         is_use_rela;
+    int         is_use_gnu_hash;
 } ch_elf_t;
 
 int  ch_elf_check_elfheader(uintptr_t base_addr);
