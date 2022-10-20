@@ -26,4 +26,16 @@
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  TAG, __VA_ARGS__)
 
 
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
+
+#define PAGE_START(addr)	(~(PAGE_SIZE - 1) & (addr))
+#define PAGE_END(addr)      (PAGE_START(addr + sizeof(uintptr_t) - 1) + PAGE_SIZE)
+#define PAGE_COVER(addr)    (PAGE_END(addr) - PAGE_START(addr))
+
+#define SET_BIT0(addr)		(addr | 1)
+#define CLEAR_BIT0(addr)	(addr & 0xFFFFFFFE)
+#define TEST_BIT0(addr)		(addr & 1)
+
 #endif //CH_UTILS_H

@@ -3,7 +3,6 @@
 #include "ch_elf.h"
 
 
-
 /**
  * get module base from /proc/pid/maps
  *  pid  = -1, get self
@@ -113,7 +112,7 @@ int chook_hook(ch_hook_info_t* info){
 
 
     //start hook
-    if(ch_elf_plt_hook(&ch_elf, info->symbol_name, info->new_func, info->old_func) < 0){
+    if(ch_elf_hook(&ch_elf, info->symbol_name, info->new_func, info->old_func) < 0){
         LOGD("[-] elf plt hook failed!");
         return -1;
     }

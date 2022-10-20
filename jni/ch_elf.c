@@ -3,7 +3,6 @@
 #include "ch_utils.h"
 #include "ch_elf.h"
 
-#define CH_ELF_DEBUG 1
 
 int ch_elf_check_elfheader(uintptr_t base_addr){
     ElfW(Ehdr) *ehdr = (ElfW(Ehdr)*)base_addr;
@@ -78,6 +77,30 @@ static uint32_t ch_elf_hash(const uint8_t *name){
         h ^= g >> 24;
     }
     return h;
+}
+
+
+static uint32_t ch_elf_hash_lookup(ch_elf_t *self, const char *symbol_name){
+    uint32_t mod;
+    const char *symbol_cur;
+    uint32_t symbol_hash = ch_elf_hash((uint8_t *)symbol_name);
+    mod = self->hash_bucket[symbol_hash % self->hash_bucket_cnt];
+
+    for(; mod != 0; mod = self->hash_chain[mod]){
+        symbol_cur = self->dynstr_tab + self->dynsym_tab[mod].st_name;
+        if(0 == strcmp(symbol_cur, symbol_name)){
+            LOGD("[+] SYMBOL_STR :%s", symbol_cur);
+            LOGD("[+] SYMBOL_IDX :%d", mod);
+            return mod;
+        }
+    }
+    return -1;
+}
+
+
+void ch_elf_flush_instruction_cache(uintptr_t addr)
+{
+    __builtin___clear_cache((void *)PAGE_START(addr), (void *)PAGE_END(addr));
 }
 
 
@@ -200,9 +223,17 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
 }
 
 
-int ch_elf_plt_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func){
+int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func){
+    uint32_t symbol_idx = -1;
 
-
+    symbol_idx = ch_elf_hash_lookup(self, symbol_name);
+    if(-1 == symbol_idx){
+        return -1;
+    }
+    
 
     return 0;
 }
+
+
+
