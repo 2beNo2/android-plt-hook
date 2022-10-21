@@ -98,6 +98,16 @@ static uint32_t ch_elf_hash_lookup(ch_elf_t *self, const char *symbol_name){
 }
 
 
+//GNU hash func
+static uint32_t ch_elf_gnu_hash(const uint8_t *name){
+    uint32_t h = 5381;
+    while(*name != 0){
+        h += (h << 5) + *name++;
+    }
+    return h;
+}
+
+
 void ch_elf_flush_instruction_cache(uintptr_t addr)
 {
     __builtin___clear_cache((void *)PAGE_START(addr), (void *)PAGE_END(addr));
@@ -135,7 +145,7 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
     self->dynamic_sz  = dynamic_Phdr->p_memsz;
     dyn     = self->dynamic;
     dyn_end = self->dynamic + (self->dynamic_sz / sizeof(ElfW(Dyn)));
-    LOGD("[+] (DYNAMIC) :0x%x", dynamic_Phdr->p_vaddr);
+    LOGD("[+] (DYNAMIC) :0x%l"PRIxPTR"", dynamic_Phdr->p_vaddr);
 
     for(; dyn < dyn_end; dyn++){
         switch(dyn->d_tag)
@@ -226,11 +236,22 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
 int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func){
     uint32_t symbol_idx = -1;
 
+    //获取符号在dynsym表中的序号
     symbol_idx = ch_elf_hash_lookup(self, symbol_name);
     if(-1 == symbol_idx){
         return -1;
     }
     
+    /* 
+    typedef struct elf32_rel { //修正的大小固定为4个字节
+        Elf32_Addr r_offset;   // 重定位后数据存放的地址
+        Elf32_Word r_info;     // 低8位调整类型  高24位表示动态符号表的索引
+            #define ELF32_R_SYM(x) ((x) >> 8)    //--> 动态符号表的索引  
+            #define ELF32_R_TYPE(x) ((x) & 0xff) //--> 调整类型，不同指令集有不同的调整类型 
+    } Elf32_Rel;
+    */
+
+    //从重定位表中找到符号在内存中的地址
 
     return 0;
 }
