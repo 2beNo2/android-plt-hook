@@ -1,4 +1,5 @@
 #include <string.h>
+#include <sys/mman.h>
 
 #include "ch_utils.h"
 #include "ch_elf.h"
@@ -95,6 +96,31 @@ static uint32_t ch_elf_hash_lookup(ch_elf_t *self, const char *symbol_name){
         }
     }
     return -1;
+}
+
+
+static void* ch_elf_get_vaddr_from_re(ch_elf_t *self, uint32_t symbol_idx){
+    /* 
+    typedef struct elf32_rel { //修正的大小固定为4个字节
+        Elf32_Addr r_offset;   // 重定位后数据存放的地址
+        Elf32_Word r_info;     // 低8位调整类型  高24位表示动态符号表的索引
+            #define ELF32_R_SYM(x) ((x) >> 8)    //--> 动态符号表的索引  
+            #define ELF32_R_TYPE(x) ((x) & 0xff) //--> 调整类型，不同指令集有不同的调整类型 
+    } Elf32_Rel;
+    */
+
+    ElfW(Rel) *replt_begin   = (ElfW(Rel) *)self->relplt;
+    ElfW(Addr) replt_sz      = self->relplt_sz;
+    ElfW(Rel) *replt_end     = replt_begin + replt_sz / sizeof(ElfW(Rel));
+
+    for(; replt_begin <= replt_end; replt_begin++){
+        if((replt_begin->r_info >> 8) == symbol_idx){
+            LOGD("[+] r_offset :%p", replt_begin->r_offset);
+            return (void*)replt_begin->r_offset;
+        }
+    }
+
+    return NULL;
 }
 
 
@@ -235,6 +261,7 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
 
 int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func){
     uint32_t symbol_idx = -1;
+    ElfW(Addr) re_addr = NULL;
 
     //获取符号在dynsym表中的序号
     symbol_idx = ch_elf_hash_lookup(self, symbol_name);
@@ -242,16 +269,24 @@ int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **
         return -1;
     }
     
-    /* 
-    typedef struct elf32_rel { //修正的大小固定为4个字节
-        Elf32_Addr r_offset;   // 重定位后数据存放的地址
-        Elf32_Word r_info;     // 低8位调整类型  高24位表示动态符号表的索引
-            #define ELF32_R_SYM(x) ((x) >> 8)    //--> 动态符号表的索引  
-            #define ELF32_R_TYPE(x) ((x) & 0xff) //--> 调整类型，不同指令集有不同的调整类型 
-    } Elf32_Rel;
-    */
-
     //从重定位表中找到符号在内存中的地址
+    re_addr = (ElfW(Addr))(self->bias_addr + ch_elf_get_vaddr_from_re(self, symbol_idx));
+    if(NULL == re_addr){
+        return -1;
+    }
+    LOGD("[+] addr :%p", re_addr);
+
+    //应该先获取目标地址的内存权限，保存下来
+
+    //修改内存权限
+    mprotect(PAGE_START((ElfW(Addr))re_addr), PAGE_SIZE, PROT_READ | PROT_WRITE);
+
+    //替换掉目标地址保存的函数地址
+    LOGD("[+] re_addr :%p", *(ElfW(Addr)*)re_addr);
+    *(ElfW(Addr)*)re_addr = (ElfW(Addr))new_func;
+
+    LOGD("[+] new_func :%p", new_func);
+    LOGD("[+] re_addr :%p", *(ElfW(Addr)*)re_addr);
 
     return 0;
 }

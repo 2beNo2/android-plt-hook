@@ -14,7 +14,7 @@ void new_printf(const char* fmt, ...){
 __attribute__((constructor)) void hook_test(){
 	printf("in constructor\n");
 	void* old_func;
-	ch_hook_info_t* info = chook_register("libc.so", "printf", new_printf, &old_func);
+	ch_hook_info_t* info = chook_register("test", "printf", new_printf, &old_func);
 	if(NULL == info){
 		return;
 	}
