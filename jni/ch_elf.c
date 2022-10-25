@@ -261,32 +261,32 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
 
 int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func){
     uint32_t symbol_idx = -1;
-    ElfW(Addr) re_addr = NULL;
+    uintptr_t re_addr = NULL;
 
     //获取符号在dynsym表中的序号
     symbol_idx = ch_elf_hash_lookup(self, symbol_name);
     if(-1 == symbol_idx){
+        LOGD("[-] FIND SYMBOL_IDX ERROR!");
         return -1;
     }
     
     //从重定位表中找到符号在内存中的地址
-    re_addr = (ElfW(Addr))(self->bias_addr + ch_elf_get_vaddr_from_re(self, symbol_idx));
+    re_addr = self->bias_addr + ch_elf_get_vaddr_from_re(self, symbol_idx);
     if(NULL == re_addr){
         return -1;
     }
-    LOGD("[+] addr :%p", re_addr);
+    LOGD("[+] re_addr :%p", re_addr);
 
     //应该先获取目标地址的内存权限，保存下来
 
     //修改内存权限
-    mprotect(PAGE_START((ElfW(Addr))re_addr), PAGE_SIZE, PROT_READ | PROT_WRITE);
+    mprotect(PAGE_START(re_addr), PAGE_SIZE, PROT_READ | PROT_WRITE);
 
     //替换掉目标地址保存的函数地址
-    LOGD("[+] re_addr :%p", *(ElfW(Addr)*)re_addr);
-    *(ElfW(Addr)*)re_addr = (ElfW(Addr))new_func;
+    *(void **)re_addr = new_func;
 
-    LOGD("[+] new_func :%p", new_func);
-    LOGD("[+] re_addr :%p", *(ElfW(Addr)*)re_addr);
+    //刷新处理器缓存
+    ch_elf_flush_instruction_cache(re_addr);
 
     return 0;
 }
