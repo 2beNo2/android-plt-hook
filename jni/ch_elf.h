@@ -47,10 +47,10 @@ typedef struct{
 
 } ch_elf_t;
 
-int  ch_elf_check_elfheader(uintptr_t base_addr);
-int  ch_elf_init(ch_elf_t *self, uintptr_t base_addr);
-int  ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func);
-
+int ch_elf_check_elfheader(uintptr_t base_addr);
+int ch_elf_init(ch_elf_t *self, uintptr_t base_addr);
+int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func);
+int ch_elf_unhook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func);
 
 #ifdef __cplusplus
 }

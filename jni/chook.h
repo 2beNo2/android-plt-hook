@@ -18,17 +18,10 @@
 extern "C" {
 #endif
 
-typedef struct{
-    const char* module_name;
-    char *symbol_name;
-    void *new_func;
-    void **old_func;
-} ch_hook_info_t;
+int chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func);
+int chook_hook();
+int chook_unhook();
 
-ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func);
-int  chook_hook(ch_hook_info_t* info);
-int  chook_unhook(ch_hook_info_t* info);
-void chook_destruct(ch_hook_info_t* info);
 
 #ifdef __cplusplus
 }

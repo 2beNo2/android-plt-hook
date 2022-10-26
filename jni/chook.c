@@ -3,13 +3,30 @@
 #include "ch_elf.h"
 
 
+typedef struct{
+    const char *module_name;
+    const char *symbol_name;
+    void *new_func;
+    void **old_func;
+    ch_elf_t ch_elf;
+} ch_hook_info_t;
+
+typedef struct {
+	ch_hook_info_t item[256];
+	int size;
+}pltHookInfo;
+
+static pltHookInfo g_info = {0};
+
+
 /**
  * get module base from /proc/pid/maps
  *  pid  = -1, get self
  *  pid != -1, get target process
  *  module_name -> module name
  */
-static void* ch_utils_get_module_base(pid_t pid, const char* module_name){
+static void* chook_get_module_base(pid_t pid, const char* module_name)
+{
     FILE* fp = NULL;
     void* base_addr = NULL;
     char perm[5];
@@ -53,79 +70,85 @@ static void* ch_utils_get_module_base(pid_t pid, const char* module_name){
 }
 
 
-ch_hook_info_t* chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func){
-    ch_hook_info_t* info = NULL;
-
-    if(NULL == module_name || NULL == symbol_name || NULL == new_func){
-        return NULL;
-    }
-    
-    if(NULL == (info = (ch_hook_info_t*)malloc(sizeof(ch_hook_info_t)))){
-        return NULL;
-    }
-    if(NULL == (info->symbol_name = strdup(symbol_name))){
-        free(info);
-        return NULL;
-    }
-    
-    info->module_name = module_name;
-    info->new_func = new_func;
-    info->old_func = old_func;
-
-    return info;
+static ch_hook_info_t *chook_add_item() 
+{
+	if (g_info.size >= 256) {
+		return NULL;
+	}
+	++g_info.size;
+	return &g_info.item[g_info.size];
 }
 
 
-int chook_hook(ch_hook_info_t* info){
-    ch_elf_t ch_elf;  //调用unhook 无法使用到，得使用堆
+static void chook_del_item(int pos)
+{
+    memcpy(&g_info.item[pos], &g_info.item[pos+1], sizeof(ch_hook_info_t) * (256 - pos));
+    memset(&g_info.item[g_info.size], 0, sizeof(ch_hook_info_t));
+	--g_info.size;
+}
 
-    if(NULL == info){
+
+int chook_register(const char *module_name, const char *symbol_name, void *new_func, void **old_func)
+{
+    if(NULL == module_name || NULL == symbol_name || NULL == new_func){
         return -1;
     }
+    
+    ch_hook_info_t* item = chook_add_item();
+    if(NULL == item){
+        LOGD("[-] get hook item failed!");
+        return -1;
+    }
+
+    item->symbol_name = symbol_name;
+    item->module_name = module_name;
+    item->new_func = new_func;
+    item->old_func = old_func;
+    return 0;
+}
+
+
+int chook_hook()
+{
+    ch_hook_info_t *info = &g_info.item[g_info.size];
+
     if(NULL == info->module_name || NULL == info->symbol_name || NULL == info->new_func){
         return -1;
     }
 
     //get module base
-    void* module_base = ch_utils_get_module_base(-1, info->module_name);
+    void* module_base = chook_get_module_base(-1, info->module_name);
     if(NULL == module_base){
         LOGD("[-] get module_base failed!");
         return -1;
     }
-    LOGD("[+] module_base:%p", module_base);
-
 
     //check elf header format
     if(ch_elf_check_elfheader((uintptr_t)module_base) < 0){
         LOGD("[-] elf header format error!");
         return -1;
     }
-    LOGD("[+] elf header format is ok");
-
 
     //init elf
-    if(ch_elf_init(&ch_elf, (uintptr_t)module_base) < 0){
+    if(ch_elf_init(&info->ch_elf, (uintptr_t)module_base) < 0){
         LOGD("[-] elf init failed!");
         return -1;
     }
-    LOGD("[+] elf init ok");
-
 
     //start hook
-    if(ch_elf_hook(&ch_elf, info->symbol_name, info->new_func, info->old_func) < 0){
+    if(ch_elf_hook(&info->ch_elf, info->symbol_name, info->new_func, info->old_func) < 0){
         LOGD("[-] elf plt hook failed!");
         return -1;
     }
-    LOGD("[+] elf plt hook ok");
-    
+
     return 0;
 }
 
 
-int chook_unhook(ch_hook_info_t* info){
-    if(NULL == info){
-        return -1;
-    }
+int chook_unhook()
+{
+    ch_hook_info_t *info = &g_info.item[g_info.size];
+
     if(NULL == info->module_name || NULL == info->symbol_name || NULL == info->new_func){
         return -1;
     }
@@ -133,13 +156,3 @@ int chook_unhook(ch_hook_info_t* info){
     return 0;
 }
 
-
-void chook_destruct(ch_hook_info_t* info){
-    if(NULL != info->symbol_name){
-        free(info->symbol_name);
-    }
-    if(NULL != info){
-        free(info);
-        info = NULL;
-    }
-}
