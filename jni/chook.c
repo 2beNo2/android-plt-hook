@@ -3,7 +3,10 @@
 #include "ch_elf.h"
 
 
-typedef struct{
+#define MAX_ITEM_COUNT 256
+
+typedef struct
+{
     const char *module_name;
     const char *symbol_name;
     void *new_func;
@@ -11,20 +14,15 @@ typedef struct{
     ch_elf_t ch_elf;
 } ch_hook_info_t;
 
-typedef struct {
-	ch_hook_info_t item[256];
+typedef struct 
+{
+	ch_hook_info_t item[MAX_ITEM_COUNT];
 	int size;
 }pltHookInfo;
 
 static pltHookInfo g_info = {0};
 
 
-/**
- * get module base from /proc/pid/maps
- *  pid  = -1, get self
- *  pid != -1, get target process
- *  module_name -> module name
- */
 static void* chook_get_module_base(pid_t pid, const char* module_name)
 {
     FILE* fp = NULL;
@@ -72,7 +70,7 @@ static void* chook_get_module_base(pid_t pid, const char* module_name)
 
 static ch_hook_info_t *chook_add_item() 
 {
-	if (g_info.size >= 256) {
+	if (g_info.size >= MAX_ITEM_COUNT) {
 		return NULL;
 	}
 	++g_info.size;
@@ -96,7 +94,7 @@ int chook_register(const char *module_name, const char *symbol_name, void *new_f
     
     ch_hook_info_t* item = chook_add_item();
     if(NULL == item){
-        LOGD("[-] get hook item failed!");
+        LOGD("[-] add hook item failed!");
         return -1;
     }
 
@@ -119,7 +117,7 @@ int chook_hook()
     //get module base
     void* module_base = chook_get_module_base(-1, info->module_name);
     if(NULL == module_base){
-        LOGD("[-] get module_base failed!");
+        LOGD("[-] get module base failed!");
         return -1;
     }
 
@@ -153,6 +151,8 @@ int chook_unhook()
         return -1;
     }
 
+    ch_elf_unhook(&info->ch_elf, info->old_func);
+    
     return 0;
 }
 

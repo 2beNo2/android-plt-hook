@@ -5,7 +5,8 @@
 #include "ch_elf.h"
 
 
-int ch_elf_check_elfheader(uintptr_t base_addr){
+int ch_elf_check_elfheader(uintptr_t base_addr)
+{
     ElfW(Ehdr) *ehdr = (ElfW(Ehdr)*)base_addr;
 
     //check magic
@@ -46,7 +47,8 @@ int ch_elf_check_elfheader(uintptr_t base_addr){
 }
 
 
-static ElfW(Phdr) *ch_elf_get_segment_by_type(ch_elf_t *self, ElfW(Word) type){
+static ElfW(Phdr) *ch_elf_get_segment_by_type(ch_elf_t *self, ElfW(Word) type)
+{
     ElfW(Phdr) *phdr = NULL;
     for(phdr = self->phdr; phdr < self->phdr + self->ehdr->e_phnum; phdr++){
         if(phdr->p_type == type){
@@ -57,7 +59,8 @@ static ElfW(Phdr) *ch_elf_get_segment_by_type(ch_elf_t *self, ElfW(Word) type){
 }
 
 
-static ElfW(Phdr) *ch_elf_get_segment_by_type_and_offset(ch_elf_t *self, ElfW(Word) type, ElfW(Off) offset){
+static ElfW(Phdr) *ch_elf_get_segment_by_type_and_offset(ch_elf_t *self, ElfW(Word) type, ElfW(Off) offset)
+{
     ElfW(Phdr) *phdr = NULL;
     for(phdr = self->phdr; phdr < self->phdr + self->ehdr->e_phnum; phdr++){
         if(phdr->p_type == type && phdr->p_offset == offset){
@@ -69,7 +72,8 @@ static ElfW(Phdr) *ch_elf_get_segment_by_type_and_offset(ch_elf_t *self, ElfW(Wo
 
 
 //ELF hash func
-static uint32_t ch_elf_hash(const uint8_t *name){
+static uint32_t ch_elf_hash(const uint8_t *name)
+{
     uint32_t h = 0, g;
     while (*name) {
         h = (h << 4) + *name++;
@@ -81,7 +85,8 @@ static uint32_t ch_elf_hash(const uint8_t *name){
 }
 
 
-static uint32_t ch_elf_hash_lookup(ch_elf_t *self, const char *symbol_name){
+static uint32_t ch_elf_hash_lookup(ch_elf_t *self, const char *symbol_name)
+{
     uint32_t mod;
     const char *symbol_cur;
     uint32_t symbol_hash = ch_elf_hash((uint8_t *)symbol_name);
@@ -90,8 +95,8 @@ static uint32_t ch_elf_hash_lookup(ch_elf_t *self, const char *symbol_name){
     for(; mod != 0; mod = self->hash_chain[mod]){
         symbol_cur = self->dynstr_tab + self->dynsym_tab[mod].st_name;
         if(0 == strcmp(symbol_cur, symbol_name)){
-            LOGD("[+] SYMBOL_STR :%s", symbol_cur);
-            LOGD("[+] SYMBOL_IDX :%d", mod);
+            LOGD("[+] (SYMBOL_STR) :%s", symbol_cur);
+            LOGD("[+] (SYMBOL_IDX) :%d", mod);
             return mod;
         }
     }
@@ -99,7 +104,8 @@ static uint32_t ch_elf_hash_lookup(ch_elf_t *self, const char *symbol_name){
 }
 
 
-static void* ch_elf_get_vaddr_from_re(ch_elf_t *self, uint32_t symbol_idx){
+static ElfW(Addr) ch_elf_get_vaddr_from_resection(ch_elf_t *self, uint32_t symbol_idx)
+{
     /* 
     typedef struct elf32_rel { //修正的大小固定为4个字节
         Elf32_Addr r_offset;   // 重定位后数据存放的地址
@@ -115,17 +121,17 @@ static void* ch_elf_get_vaddr_from_re(ch_elf_t *self, uint32_t symbol_idx){
 
     for(; replt_begin <= replt_end; replt_begin++){
         if((replt_begin->r_info >> 8) == symbol_idx){
-            LOGD("[+] r_offset :%p", replt_begin->r_offset);
-            return (void*)replt_begin->r_offset;
+            return (ElfW(Addr))replt_begin->r_offset;
         }
     }
 
-    return NULL;
+    return -1;
 }
 
 
 //GNU hash func
-static uint32_t ch_elf_gnu_hash(const uint8_t *name){
+static uint32_t ch_elf_gnu_hash(const uint8_t *name)
+{
     uint32_t h = 5381;
     while(*name != 0){
         h += (h << 5) + *name++;
@@ -140,7 +146,8 @@ void ch_elf_flush_instruction_cache(uintptr_t addr)
 }
 
 
-int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
+int ch_elf_init(ch_elf_t *self, uintptr_t base_addr)
+{
     ElfW(Phdr) *phdr0         = NULL;
     ElfW(Phdr) *dynamic_Phdr  = NULL;
     ElfW(Dyn)  *dyn           = NULL;
@@ -171,7 +178,7 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
     self->dynamic_sz  = dynamic_Phdr->p_memsz;
     dyn     = self->dynamic;
     dyn_end = self->dynamic + (self->dynamic_sz / sizeof(ElfW(Dyn)));
-    LOGD("[+] (DYNAMIC) :0x%l"PRIxPTR"", dynamic_Phdr->p_vaddr);
+    LOGD("[+] (DYNAMIC) :%p", (void *)dynamic_Phdr->p_vaddr);
 
     for(; dyn < dyn_end; dyn++){
         switch(dyn->d_tag)
@@ -184,13 +191,13 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
         case DT_STRTAB:
             {
                 self->dynstr_tab = (const char *)(self->bias_addr + dyn->d_un.d_ptr);
-                LOGD("[+] (STRTAB) :0x%x", dyn->d_un.d_ptr);
+                LOGD("[+] (STRTAB) :%p", (void *)dyn->d_un.d_ptr);
                 break;
             }
         case DT_SYMTAB:
             {
                 self->dynsym_tab = (ElfW(Sym)*)(self->bias_addr + dyn->d_un.d_ptr);
-                LOGD("[+] (SYMTAB) :0x%x", dyn->d_un.d_ptr);
+                LOGD("[+] (SYMTAB) :%p", (void *)dyn->d_un.d_ptr);
                 break;
             }
         case DT_PLTREL:
@@ -202,27 +209,27 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
         case DT_JMPREL:
             {
                 self->relplt = self->bias_addr + dyn->d_un.d_ptr;
-                LOGD("[+] (JMPREL) :0x%x", dyn->d_un.d_ptr);
+                LOGD("[+] (JMPREL) :%p", (void *)dyn->d_un.d_ptr);
                 break;
             }
         case DT_PLTRELSZ:
             {
                 self->relplt_sz = dyn->d_un.d_val;
-                LOGD("[+] (PLTRELSZ) :0x%x", dyn->d_un.d_val);
+                LOGD("[+] (PLTRELSZ) :%p", (void *)dyn->d_un.d_val);
                 break;
             }
         case DT_REL:
         case DT_RELA:
             {
                 self->reldyn = self->bias_addr + dyn->d_un.d_ptr;
-                LOGD("[+] (REL/RELA) :0x%x", dyn->d_un.d_ptr);
+                LOGD("[+] (REL/RELA) :%p", (void *)dyn->d_un.d_ptr);
                 break;
             }
         case DT_RELSZ:
         case DT_RELASZ:
             {
                 self->reldyn_sz = dyn->d_un.d_val;
-                LOGD("[+] (RELSZ/RELASZ) :0x%x", dyn->d_un.d_val);
+                LOGD("[+] (RELSZ/RELASZ) :%p", (void *)dyn->d_un.d_val);
                 break;
             }
         case DT_HASH:
@@ -233,7 +240,7 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
                 self->hash_chain_cnt   = hash[1];
                 self->hash_bucket      = &hash[2];
                 self->hash_chain       = &(self->hash_bucket[self->hash_bucket_cnt]);
-                LOGD("[+] (HASH) :0x%x", dyn->d_un.d_ptr);
+                LOGD("[+] (HASH) :%p", (void *)dyn->d_un.d_ptr);
                 break;
             }
         case DT_GNU_HASH:
@@ -247,7 +254,7 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
                 self->bloom           = (ElfW(Addr) *)(&hash[4]);
                 self->gnu_bucket      = (uint32_t *)(&(self->bloom[self->bloom_sz]));
                 self->gnu_chain       = (uint32_t *)(&(self->gnu_bucket[self->gnu_bucket_cnt]));
-                LOGD("[+] (GNU_HASH) :0x%x", dyn->d_un.d_ptr);
+                LOGD("[+] (GNU_HASH) :%p", (void *)dyn->d_un.d_ptr);
                 break;
             }
         default:
@@ -259,9 +266,11 @@ int ch_elf_init(ch_elf_t *self, uintptr_t base_addr){
 }
 
 
-int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func){
+int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func)
+{
     uint32_t symbol_idx = -1;
-    uintptr_t re_addr = NULL;
+    ElfW(Addr) offset = 0;
+    ElfW(Addr) re_addr;
 
     //获取符号在dynsym表中的序号
     symbol_idx = ch_elf_hash_lookup(self, symbol_name);
@@ -271,28 +280,40 @@ int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **
     }
     
     //从重定位表中找到符号在内存中的地址
-    re_addr = self->bias_addr + ch_elf_get_vaddr_from_re(self, symbol_idx);
-    if(NULL == re_addr){
+    offset = ch_elf_get_vaddr_from_resection(self, symbol_idx);
+    if(-1 == offset){
         LOGD("[-] find re_addr failed!");
         return -1;
     }
+    re_addr = self->bias_addr + offset;
+    self->re_addr = re_addr;
 
-    //应该先获取目标地址的内存权限，保存下来
+    //应该先获取目标地址的内存权限，保存下来，用于修改后还原内存权限
 
     //修改内存权限
-    mprotect(PAGE_START(re_addr), PAGE_SIZE, PROT_READ | PROT_WRITE);
+    mprotect((void*)PAGE_START(self->re_addr), PAGE_SIZE, PROT_READ | PROT_WRITE);
 
-    //替换掉目标地址保存的函数地址
-    *old_func = *(void **)re_addr;
-    *(void **)re_addr = new_func;
-    LOGD("[+] (old) :%p", old_func);
-    LOGD("[+] (new) :%p", *(void **)re_addr);
+    //保存并替换掉目标地址保存的函数地址
+    *old_func = *(void **)self->re_addr;
+    *(void **)self->re_addr = new_func;
+    LOGD("[+] (old) :%p", *old_func);
+    LOGD("[+] (new) :%p", *(void **)self->re_addr);
 
+    //还原内存权限
+    
     //刷新处理器缓存
-    ch_elf_flush_instruction_cache(re_addr);
+    ch_elf_flush_instruction_cache(self->re_addr);
 
     return 0;
 }
 
 
+int ch_elf_unhook(ch_elf_t *self, void **old_func)
+{
+    *(void **)self->re_addr = *old_func;
+
+    ch_elf_flush_instruction_cache(self->re_addr);
+
+    return 0;
+}
 

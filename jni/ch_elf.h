@@ -9,7 +9,8 @@
 extern "C" {
 #endif
 
-typedef struct{
+typedef struct
+{
     ElfW(Addr)  base_addr;
     ElfW(Addr)  bias_addr;
     ElfW(Ehdr)  *ehdr;
@@ -45,12 +46,13 @@ typedef struct{
     uint32_t    *gnu_bucket;
     uint32_t    *gnu_chain;
 
+    ElfW(Addr)  re_addr; //save symbol vaddr
 } ch_elf_t;
 
 int ch_elf_check_elfheader(uintptr_t base_addr);
 int ch_elf_init(ch_elf_t *self, uintptr_t base_addr);
 int ch_elf_hook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func);
-int ch_elf_unhook(ch_elf_t *self, const char *symbol_name, void *new_func, void **old_func);
+int ch_elf_unhook(ch_elf_t *self, void **old_func);
 
 #ifdef __cplusplus
 }
